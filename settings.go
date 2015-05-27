@@ -1,4 +1,4 @@
-package runner
+package main
 
 import (
 	"fmt"
@@ -89,11 +89,6 @@ func loadRunnerConfigSettings() {
 	for key, value := range sections[mainSettingsSection] {
 		settings[key] = value
 	}
-}
-
-func initSettings() {
-	loadEnvSettings()
-	loadRunnerConfigSettings()
 }
 
 func getenv(key, defaultValue string) string {

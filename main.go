@@ -15,11 +15,37 @@ package main
 import (
 	"flag"
 	"fmt"
-	"./runner"
+	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"time"
+	"github.com/howeyc/fsnotify"
 )
 
+var (
+	startChannel chan string
+	stopChannel  chan bool
+	mainLog      logFunc
+	watcherLog   logFunc
+	runnerLog    logFunc
+	buildLog     logFunc
+	appLog       logFunc
+)
+
+func init() {
+	startChannel = make(chan string, 1000)
+	stopChannel = make(chan bool)
+}
+
+// Watches for file changes in the root directory.
+// After each file system event it builds and (re)starts the application.
 func main() {
+
 	configPath := flag.String("c", "", "config file path")
 	flag.Parse()
 
@@ -32,5 +58,220 @@ func main() {
 		}
 	}
 
-	runner.Start()
+	//	initLimit
+	{
+		var rLimit syscall.Rlimit
+		rLimit.Max = 10000
+		rLimit.Cur = 10000
+		err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+		if err != nil {
+			fmt.Println("Error Setting Rlimit ", err)
+		}
+	}
+
+	// initSettings
+	loadEnvSettings()
+	loadRunnerConfigSettings()
+
+	// initLogFuncs
+	mainLog = newLogFunc("main")
+	watcherLog = newLogFunc("watcher")
+	runnerLog = newLogFunc("runner")
+	buildLog = newLogFunc("build")
+	appLog = newLogFunc("app")
+
+	// initFolders
+	{
+		runnerLog("InitFolders")
+		path := tmpPath()
+		runnerLog("mkdir %s", path)
+		err := os.Mkdir(path, 0755)
+		if err != nil {
+			runnerLog(err.Error())
+		}
+	}
+
+	// setEnvVars
+	{
+		os.Setenv("DEV_RUNNER", "1")
+		wd, err := os.Getwd()
+		if err == nil {
+			os.Setenv("RUNNER_WD", wd)
+		}
+
+		for k, v := range settings {
+			key := strings.ToUpper(fmt.Sprintf("%s%s", envSettingsPrefix, k))
+			os.Setenv(key, v)
+		}
+	}
+
+	// watch
+	{
+		root := root()
+		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() && !isTmpDir(path) {
+				if len(path) > 1 && strings.HasPrefix(filepath.Base(path), ".") {
+					return filepath.SkipDir
+				}
+
+				watch(path)
+			}
+
+			return err
+		})
+	}
+
+	// start
+	start()
+	startChannel <- "/"
+
+	<-make(chan int)
+}
+
+func flushEvents() {
+	for {
+		select {
+		case eventName := <-startChannel:
+			mainLog("receiving event %s", eventName)
+		default:
+			return
+		}
+	}
+}
+
+func run() bool {
+	runnerLog("Running...")
+
+	cmd := exec.Command(buildPath())
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		fatal(err)
+	}
+
+	go io.Copy(appLogWriter{}, stderr)
+	go io.Copy(appLogWriter{}, stdout)
+
+	go func() {
+		<-stopChannel
+		pid := cmd.Process.Pid
+		runnerLog("Killing PID %d", pid)
+		cmd.Process.Kill()
+	}()
+
+	return true
+}
+
+func start() {
+	loopIndex := 0
+	buildDelay := buildDelay()
+
+	started := false
+
+	go func() {
+		for {
+			loopIndex++
+			mainLog("Waiting (loop %d)...", loopIndex)
+			eventName := <-startChannel
+
+			mainLog("receiving first event %s", eventName)
+			mainLog("sleeping for %d milliseconds", buildDelay)
+			time.Sleep(buildDelay * time.Millisecond)
+			mainLog("flushing events")
+
+			flushEvents()
+
+			mainLog("Started! (%d Goroutines)", runtime.NumGoroutine())
+			err := removeBuildErrorsLog()
+			if err != nil {
+				mainLog(err.Error())
+			}
+
+			errorMessage, ok := runTask()
+			if !ok {
+				mainLog("Build Failed: \n %s", errorMessage)
+				if !started {
+					os.Exit(1)
+				}
+				createBuildErrorsLog(errorMessage)
+			} else {
+				if started {
+					stopChannel <- true
+				}
+				run()
+			}
+
+			started = true
+			mainLog(strings.Repeat("-", 20))
+		}
+	}()
+}
+
+func watch(path string) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fatal(err)
+	}
+
+	go func() {
+		for {
+			select {
+			case ev := <-watcher.Event:
+				if isWatchedFile(ev.Name) {
+					watcherLog("sending event %s", ev)
+					startChannel <- ev.String()
+				}
+			case err := <-watcher.Error:
+				watcherLog("error: %s", err)
+			}
+		}
+	}()
+
+	watcherLog("Watching %s", path)
+	err = watcher.Watch(path)
+
+	if err != nil {
+		fatal(err)
+	}
+}
+
+func runTask() (string, bool) {
+	buildLog("Building...")
+
+	cmd := exec.Command("go", "build", "-o", buildPath(), root())
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		fatal(err)
+	}
+
+	io.Copy(os.Stdout, stdout)
+	errBuf, _ := ioutil.ReadAll(stderr)
+
+	err = cmd.Wait()
+	if err != nil {
+		return string(errBuf), false
+	}
+
+	return "", true
 }

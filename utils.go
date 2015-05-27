@@ -1,20 +1,10 @@
-package runner
+package main
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 )
-
-func initFolders() {
-	runnerLog("InitFolders")
-	path := tmpPath()
-	runnerLog("mkdir %s", path)
-	err := os.Mkdir(path, 0755)
-	if err != nil {
-		runnerLog(err.Error())
-	}
-}
 
 func isTmpDir(path string) bool {
 	absolutePath, _ := filepath.Abs(path)

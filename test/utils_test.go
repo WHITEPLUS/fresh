@@ -1,4 +1,4 @@
-package runner
+package main
 
 import (
 	assert "github.com/pilu/miniassert"
