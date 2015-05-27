@@ -15,7 +15,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/WHITEPLUS/fresh/runner"
+	"./runner"
 	"os"
 )
 
