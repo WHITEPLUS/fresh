@@ -210,6 +210,8 @@ func start() {
 						stopChannel <- true
 					}
 					run()
+				} else {
+					shutdownProcesses()
 				}
 			}
 
@@ -220,6 +222,7 @@ func start() {
 }
 
 func watch(path string) {
+	watcherLog("test " + path)
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		fatal(err)
@@ -251,6 +254,36 @@ func build() (string, bool) {
 	buildLog("Building...")
 
 	cmd := exec.Command("go", "build", "-o", buildPath(), root())
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fatal(err)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		fatal(err)
+	}
+
+	io.Copy(os.Stdout, stdout)
+	errBuf, _ := ioutil.ReadAll(stderr)
+
+	err = cmd.Wait()
+	if err != nil {
+		return string(errBuf), false
+	}
+
+	return "", true
+}
+
+func shutdownProcesses() {
+
+	cmd := exec.Command("pgrep", buildPath())
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
