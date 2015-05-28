@@ -108,6 +108,8 @@ func main() {
 	// watch
 	{
 		root := root()
+//		watch := watchInotify
+		watch := watchDefault
 		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() && !isTmpDir(path) {
 				if len(path) > 1 && strings.HasPrefix(filepath.Base(path), ".") {
@@ -221,13 +223,13 @@ func start() {
 	}()
 }
 
-func watch(path string) {
-	watcherLog("test " + path)
+func watchInotify(path string) {
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		fatal(err)
 	}
-
+//
 	go func() {
 		for {
 			select {
@@ -248,6 +250,103 @@ func watch(path string) {
 	if err != nil {
 		fatal(err)
 	}
+}
+
+func watchDefault(path string) {
+
+	getFiles := func () map[string]os.FileInfo {
+
+		readFiles, err := ioutil.ReadDir(path)
+		if err != nil {
+			fatal(err)
+		}
+
+		files := make(map[string]os.FileInfo, len(readFiles))
+
+		for _, f := range readFiles {
+			files[f.Name()] = f
+		}
+
+		return files
+	}
+
+	go func () {
+
+		files := getFiles()
+
+		for {
+
+			time.Sleep(500 * time.Millisecond)
+
+			readFiles, err := ioutil.ReadDir(path)
+
+			if os.IsNotExist(err) {
+				watcherLog("found deleted directory %s", path)
+				startChannel <- path
+				return
+			}
+
+			if err != nil {
+				fatal(err)
+			}
+
+			updateNecessary := false
+			existedFiles := make(map[string]bool, len(readFiles))
+
+			for _, f := range readFiles {
+
+				existedFiles[f.Name()] = true
+
+				prev, ok := files[f.Name()]
+				fpath := filepath.Join(path, f.Name())
+
+				if !ok {
+
+					if f.IsDir() {
+						watcherLog("found new directory %s", fpath)
+						startChannel <- fpath
+						watchDefault(fpath)
+					}
+					if !f.IsDir() && isWatchedFile(fpath) {
+						watcherLog("found new file %s", fpath)
+						startChannel <- fpath
+					}
+
+					updateNecessary = true
+
+				} else if prev.ModTime().Unix() != f.ModTime().Unix() {
+
+					if isWatchedFile(fpath) {
+						watcherLog("found modified file %s", fpath)
+						startChannel <- fpath
+					}
+
+					files[f.Name()] = f
+				}
+			}
+
+			for _, f := range files {
+
+				fpath := filepath.Join(path, f.Name())
+
+				if !existedFiles[f.Name()] {
+
+					if !f.IsDir() && isWatchedFile(fpath) {
+						watcherLog("found deleted file %s", fpath)
+						startChannel <- fpath
+					}
+
+					updateNecessary = true
+				}
+			}
+
+			if (updateNecessary) {
+				files = getFiles()
+			}
+		}
+	}()
+
+	watcherLog("Watching %s", path)
 }
 
 func build() (string, bool) {
