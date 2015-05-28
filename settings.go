@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/pilu/config"
 	"os"
+	"syscall"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,12 +19,14 @@ const (
 var settings = map[string]string{
 	"config_path":       "./runner.conf",
 	"root":              ".",
-	"tmp_path":          "./tmp",
+	"output_path":       "./tmp",
 	"build_name":        "runner-build",
 	"build_log":         "runner-build-errors.log",
 	"valid_ext":         ".go, .tpl, .tmpl, .html",
 	"build_delay":       "600",
 	"colors":            "1",
+	"shutdown_signal":   "TERM",
+	"auto_run":          "on",
 	"log_color_main":    "cyan",
 	"log_color_build":   "yellow",
 	"log_color_runner":  "green",
@@ -103,15 +106,28 @@ func root() string {
 	return settings["root"]
 }
 
-func tmpPath() string {
-	return settings["tmp_path"]
+func autoRun() bool {
+	return settings["auto_run"] == "on";
+}
+
+func shutdownSignal() syscall.Signal {
+	signal := syscall.SIGTERM
+	switch settings["shutdown_signal"] {
+		case "KILL":
+			signal = syscall.SIGKILL
+	}
+	return signal
+}
+
+func outputPath() string {
+	return settings["output_path"]
 }
 
 func buildName() string {
 	return settings["build_name"]
 }
 func buildPath() string {
-	return filepath.Join(tmpPath(), buildName())
+	return filepath.Join(outputPath(), buildName())
 }
 
 func buildErrorsFileName() string {
@@ -119,7 +135,7 @@ func buildErrorsFileName() string {
 }
 
 func buildErrorsFilePath() string {
-	return filepath.Join(tmpPath(), buildErrorsFileName())
+	return filepath.Join(outputPath(), buildErrorsFileName())
 }
 
 func configPath() string {

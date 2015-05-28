@@ -83,7 +83,7 @@ func main() {
 	// initFolders
 	{
 		runnerLog("InitFolders")
-		path := tmpPath()
+		path := outputPath()
 		runnerLog("mkdir %s", path)
 		err := os.Mkdir(path, 0755)
 		if err != nil {
@@ -165,8 +165,8 @@ func run() bool {
 	go func() {
 		<-stopChannel
 		pid := cmd.Process.Pid
-		runnerLog("Killing PID %d", pid)
-		cmd.Process.Kill()
+		runnerLog("Shutdown PID %d", pid)
+		cmd.Process.Signal(shutdownSignal())
 	}()
 
 	return true
@@ -197,7 +197,7 @@ func start() {
 				mainLog(err.Error())
 			}
 
-			errorMessage, ok := runTask()
+			errorMessage, ok := build()
 			if !ok {
 				mainLog("Build Failed: \n %s", errorMessage)
 				if !started {
@@ -205,10 +205,12 @@ func start() {
 				}
 				createBuildErrorsLog(errorMessage)
 			} else {
-				if started {
-					stopChannel <- true
+				if autoRun() {
+					if started {
+						stopChannel <- true
+					}
+					run()
 				}
-				run()
 			}
 
 			started = true
@@ -245,7 +247,7 @@ func watch(path string) {
 	}
 }
 
-func runTask() (string, bool) {
+func build() (string, bool) {
 	buildLog("Building...")
 
 	cmd := exec.Command("go", "build", "-o", buildPath(), root())

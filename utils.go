@@ -8,14 +8,14 @@ import (
 
 func isTmpDir(path string) bool {
 	absolutePath, _ := filepath.Abs(path)
-	absoluteTmpPath, _ := filepath.Abs(tmpPath())
+	absoluteTmpPath, _ := filepath.Abs(outputPath())
 
 	return absolutePath == absoluteTmpPath
 }
 
 func isWatchedFile(path string) bool {
 	absolutePath, _ := filepath.Abs(path)
-	absoluteTmpPath, _ := filepath.Abs(tmpPath())
+	absoluteTmpPath, _ := filepath.Abs(outputPath())
 
 	if strings.HasPrefix(absolutePath, absoluteTmpPath) {
 		return false
