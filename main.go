@@ -386,7 +386,7 @@ func shutdown(p *os.Process) {
 
 func shutdownProcesses() (string, bool) {
 
-	cmd := exec.Command("pgrep", buildPath())
+	cmd := exec.Command("pgrep", "-f", buildPath())
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
