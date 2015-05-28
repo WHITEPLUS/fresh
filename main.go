@@ -281,7 +281,7 @@ func build() (string, bool) {
 	return "", true
 }
 
-func shutdownProcesses() {
+func shutdownProcesses() (string, bool) {
 
 	cmd := exec.Command("pgrep", buildPath())
 
