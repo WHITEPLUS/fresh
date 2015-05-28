@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"strconv"
 	"syscall"
 	"time"
 	"github.com/howeyc/fsnotify"
@@ -166,9 +167,7 @@ func run() bool {
 
 	go func() {
 		<-stopChannel
-		pid := cmd.Process.Pid
-		runnerLog("Shutdown PID %d", pid)
-		cmd.Process.Signal(shutdownSignal())
+		shutdown(cmd.Process)
 	}()
 
 	return true
@@ -380,6 +379,11 @@ func build() (string, bool) {
 	return "", true
 }
 
+func shutdown(p *os.Process) {
+	runnerLog("Shutdown PID %d", p.Pid)
+	p.Signal(shutdownSignal())
+}
+
 func shutdownProcesses() (string, bool) {
 
 	cmd := exec.Command("pgrep", buildPath())
@@ -399,12 +403,23 @@ func shutdownProcesses() (string, bool) {
 		fatal(err)
 	}
 
-	io.Copy(os.Stdout, stdout)
+	outBuf, _ := ioutil.ReadAll(stdout)
 	errBuf, _ := ioutil.ReadAll(stderr)
 
 	err = cmd.Wait()
 	if err != nil {
 		return string(errBuf), false
+	}
+
+	lines := strings.Split(string(outBuf), "\n")
+	for _, line := range lines {
+		pid, _ := strconv.ParseInt(line, 10, 32)
+		if (pid > 0) {
+			p, err := os.FindProcess(int(pid))
+			if err == nil {
+				shutdown(p)
+			}
+		}
 	}
 
 	return "", true
