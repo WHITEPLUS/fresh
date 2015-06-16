@@ -21,10 +21,12 @@ func isWatchedFile(path string) bool {
 		return false
 	}
 
+	name := filepath.Base(path)
 	ext := filepath.Ext(path)
 
 	for _, e := range strings.Split(settings["valid_ext"], ",") {
-		if strings.TrimSpace(e) == ext {
+		validExt := strings.TrimSpace(e)
+		if validExt == ext || (ext == "" && validExt == name) {
 			return true
 		}
 	}
