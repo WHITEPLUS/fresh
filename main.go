@@ -155,7 +155,7 @@ func start() {
 
 			if errorMessage, ok := build(); !ok {
 
-				mainLog("Build Failed: \n %s", errorMessage)
+				buildLog("Build Failed: \n %s", errorMessage)
 				if loopIndex == 1 {
 					os.Exit(1)
 				}
@@ -304,6 +304,14 @@ func watchDefault(path string) {
 
 func build() (string, bool) {
 
+	// Run post-build-script
+	if s := settings.preBuildScript(); s.Exists() {
+		buildLog("Run pre build script...")
+		if errorMessage, ok := s.Run(); !ok {
+			return errorMessage, false
+		}
+	}
+
 	buildLog("Building...")
 
 	cmd := exec.Command("go", "build", "-o", settings.buildPath(), settings.root())
@@ -333,8 +341,10 @@ func build() (string, bool) {
 
 	// Run post-build-script
 	if s := settings.postBuildScript(); s.Exists() {
-		runnerLog("Run post build script...")
-		s.Run()
+		buildLog("Run post build script...")
+		if errorMessage, ok := s.Run(); !ok {
+			return errorMessage, false
+		}
 	}
 
 	return "", true

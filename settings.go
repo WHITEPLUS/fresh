@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	envSettingsPrefix   = "RUNNER_"
 	mainSettingsSection = "Settings"
 )
 
@@ -110,6 +109,10 @@ func (s Settings) outputPath() string {
 
 func (s Settings) postBuildScript() Script {
 	return Script(s["post_build_script"])
+}
+
+func (s Settings) preBuildScript() Script {
+	return Script(s["pre_build_script"])
 }
 
 func (s Settings) buildName() string {

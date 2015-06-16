@@ -15,10 +15,14 @@ func (s Script) Exists() bool {
 	return s != ""
 }
 
-func (s Script) Run() {
+func (s Script) Run() (string, bool) {
 
 	command := []string{string(s)}
-	shebang := s.Shebang()
+	shebang, err := s.Shebang()
+
+	if err != nil {
+		return err.Error(), false
+	}
 
 	if shebang != "" {
 		command = append(strings.Split(shebang, " "), command...)
@@ -28,17 +32,17 @@ func (s Script) Run() {
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		fatal(err)
+		return err.Error(), false
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		fatal(err)
+		return err.Error(), false
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		fatal(err)
+		return err.Error(), false
 	}
 
 	io.Copy(os.Stdout, stdout)
@@ -46,15 +50,17 @@ func (s Script) Run() {
 
 	err = cmd.Wait()
 	if err != nil {
-		mainLog("Post Build Script Failed: \n %s", string(errBuf))
+		return string(errBuf), false
 	}
+
+	return "", true
 }
 
-func (s Script) Shebang() string {
+func (s Script) Shebang() (string, error) {
 
 	f, err := os.Open(string(s))
 	if (err != nil) {
-		return ""
+		return "", err
 	}
 	defer f.Close()
 
@@ -75,5 +81,5 @@ func (s Script) Shebang() string {
 		}
 	}
 
-	return shebang
+	return shebang, nil
 }
