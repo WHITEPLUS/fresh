@@ -36,6 +36,8 @@ var (
 	runnerLog    logFunc
 	buildLog     logFunc
 	appLog       logFunc
+	configPath = flag.String("c", "", "config file path")
+	buildOnce = flag.Bool("1", false, "build once")
 )
 
 func init() {
@@ -47,7 +49,6 @@ func init() {
 // After each file system event it builds and (re)starts the application.
 func main() {
 
-	configPath := flag.String("c", "", "config file path")
 	flag.Parse()
 
 	if *configPath != "" {
@@ -55,7 +56,7 @@ func main() {
 			fmt.Printf("Can't find config file `%s`\n", *configPath)
 			os.Exit(1)
 		} else {
-			os.Setenv("RUNNER_CONFIG_PATH", *configPath)
+			settings["config_path"] = *configPath
 		}
 	}
 
@@ -71,8 +72,7 @@ func main() {
 	}
 
 	// initSettings
-	loadEnvSettings()
-	loadRunnerConfigSettings()
+	settings.load()
 
 	// initLogFuncs
 	mainLog = newLogFunc("main")
@@ -84,7 +84,7 @@ func main() {
 	// initFolders
 	{
 		runnerLog("InitFolders")
-		path := outputPath()
+		path := settings.outputPath()
 		runnerLog("mkdir %s", path)
 		err := os.Mkdir(path, 0755)
 		if err != nil {
@@ -92,25 +92,13 @@ func main() {
 		}
 	}
 
-	// setEnvVars
-	{
-		os.Setenv("DEV_RUNNER", "1")
-		wd, err := os.Getwd()
-		if err == nil {
-			os.Setenv("RUNNER_WD", wd)
-		}
-
-		for k, v := range settings {
-			key := strings.ToUpper(fmt.Sprintf("%s%s", envSettingsPrefix, k))
-			os.Setenv(key, v)
-		}
-	}
-
 	// watch
-	{
-		root := root()
-//		watch := watchInotify
+	if !*buildOnce {
+		root := settings.root()
 		watch := watchDefault
+		if settings["watch_method"] == "inotify" {
+			watch = watchInotify
+		}
 		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() && !isTmpDir(path) {
 				if len(path) > 1 && strings.HasPrefix(filepath.Base(path), ".") {
@@ -142,42 +130,9 @@ func flushEvents() {
 	}
 }
 
-func run() bool {
-	runnerLog("Running...")
-
-	cmd := exec.Command(buildPath())
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fatal(err)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fatal(err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		fatal(err)
-	}
-
-	go io.Copy(appLogWriter{}, stderr)
-	go io.Copy(appLogWriter{}, stdout)
-
-	go func() {
-		<-stopChannel
-		shutdown(cmd.Process)
-	}()
-
-	return true
-}
-
 func start() {
 	loopIndex := 0
-	buildDelay := buildDelay()
-
-	started := false
+	buildDelay := settings.buildDelay()
 
 	go func() {
 		for {
@@ -198,25 +153,24 @@ func start() {
 				mainLog(err.Error())
 			}
 
-			errorMessage, ok := build()
-			if !ok {
+			if errorMessage, ok := build(); !ok {
+
 				mainLog("Build Failed: \n %s", errorMessage)
-				if !started {
+				if loopIndex == 1 {
 					os.Exit(1)
 				}
 				createBuildErrorsLog(errorMessage)
+
 			} else {
-				if autoRun() {
-					if started {
-						stopChannel <- true
-					}
-					run()
-				} else {
-					shutdownProcesses()
-				}
+
+				// Send shutdown signal
+				shutdown()
 			}
 
-			started = true
+			if *buildOnce {
+				os.Exit(0)
+			}
+
 			mainLog(strings.Repeat("-", 20))
 		}
 	}()
@@ -228,7 +182,7 @@ func watchInotify(path string) {
 	if err != nil {
 		fatal(err)
 	}
-//
+
 	go func() {
 		for {
 			select {
@@ -349,9 +303,10 @@ func watchDefault(path string) {
 }
 
 func build() (string, bool) {
+
 	buildLog("Building...")
 
-	cmd := exec.Command("go", "build", "-o", buildPath(), root())
+	cmd := exec.Command("go", "build", "-o", settings.buildPath(), settings.root())
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -376,19 +331,27 @@ func build() (string, bool) {
 		return string(errBuf), false
 	}
 
+	// Run post-build-script
+	if s := settings.postBuildScript(); s.Exists() {
+		runnerLog("Run post build script...")
+		s.Run()
+	}
+
 	return "", true
 }
 
-func shutdown(p *os.Process) {
-	runnerLog("Shutdown PID %d", p.Pid)
-	p.Signal(shutdownSignal())
-}
+func shutdown() {
 
-func shutdownProcesses() (string, bool) {
+	if settings.shutdownSignal() == 0 {
+		return
+	}
 
-	cmd := exec.Command("pgrep", "-f", buildPath())
+	runnerLog("Send shutdown signals...")
 
-	stderr, err := cmd.StderrPipe()
+	cmd := exec.Command("pgrep", "-f", settings.buildPath())
+
+//	stderr, err := cmd.StderrPipe()
+	_, err := cmd.StderrPipe()
 	if err != nil {
 		fatal(err)
 	}
@@ -404,11 +367,12 @@ func shutdownProcesses() (string, bool) {
 	}
 
 	outBuf, _ := ioutil.ReadAll(stdout)
-	errBuf, _ := ioutil.ReadAll(stderr)
+//	errBuf, _ := ioutil.ReadAll(stderr)
 
 	err = cmd.Wait()
 	if err != nil {
-		return string(errBuf), false
+//		return string(errBuf), false
+		return
 	}
 
 	lines := strings.Split(string(outBuf), "\n")
@@ -417,10 +381,9 @@ func shutdownProcesses() (string, bool) {
 		if (pid > 0) {
 			p, err := os.FindProcess(int(pid))
 			if err == nil {
-				shutdown(p)
+				runnerLog("Shutdown PID %d", p.Pid)
+				p.Signal(settings.shutdownSignal())
 			}
 		}
 	}
-
-	return "", true
 }

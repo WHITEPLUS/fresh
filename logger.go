@@ -14,7 +14,7 @@ var logger = logPkg.New(os.Stderr, "", 0)
 func newLogFunc(prefix string) func(string, ...interface{}) {
 	color, clear := "", ""
 	if settings["colors"] == "1" {
-		color = fmt.Sprintf("\033[%sm", logColor(prefix))
+		color = fmt.Sprintf("\033[%sm", settings.logColor(prefix))
 		clear = fmt.Sprintf("\033[%sm", colors["reset"])
 	}
 	prefix = fmt.Sprintf("%-11s", prefix)

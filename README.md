@@ -1,14 +1,15 @@
-# Fresh
+# GraceFresh
 
-Fresh is a command line tool that builds and (re)starts your web application everytime you save a Go or template file.
-
+GraceFresh is a command line tool that builds and shutdowns your fcgi web application everytime you save a Go file.
+<!--
 If the web framework you are using supports the Fresh runner, it will show build errors on your browser.
 
 It currently works with [Traffic](https://github.com/pilu/traffic), [Martini](https://github.com/codegangsta/martini) and [gocraft/web](https://github.com/gocraft/web).
+-->
 
 ## Installation
 
-    go get github.com/pilu/fresh
+    go get github.com/WHITEPLUS/gracefresh
 
 ## Usage
 
@@ -16,7 +17,7 @@ It currently works with [Traffic](https://github.com/pilu/traffic), [Martini](ht
 
 Start fresh:
 
-    fresh
+    gracefresh
 
 Fresh will watch for file events, and every time you create/modifiy/delete a file it will build and restart the application.
 If `go build` returns an error, it will log it in the tmp folder.

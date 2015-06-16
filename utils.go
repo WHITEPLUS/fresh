@@ -8,14 +8,14 @@ import (
 
 func isTmpDir(path string) bool {
 	absolutePath, _ := filepath.Abs(path)
-	absoluteTmpPath, _ := filepath.Abs(outputPath())
+	absoluteTmpPath, _ := filepath.Abs(settings.outputPath())
 
 	return absolutePath == absoluteTmpPath
 }
 
 func isWatchedFile(path string) bool {
 	absolutePath, _ := filepath.Abs(path)
-	absoluteTmpPath, _ := filepath.Abs(outputPath())
+	absoluteTmpPath, _ := filepath.Abs(settings.outputPath())
 
 	if strings.HasPrefix(absolutePath, absoluteTmpPath) {
 		return false
@@ -33,7 +33,7 @@ func isWatchedFile(path string) bool {
 }
 
 func createBuildErrorsLog(message string) bool {
-	file, err := os.Create(buildErrorsFilePath())
+	file, err := os.Create(settings.buildErrorsFilePath())
 	if err != nil {
 		return false
 	}
@@ -47,7 +47,7 @@ func createBuildErrorsLog(message string) bool {
 }
 
 func removeBuildErrorsLog() error {
-	err := os.Remove(buildErrorsFilePath())
+	err := os.Remove(settings.buildErrorsFilePath())
 
 	return err
 }

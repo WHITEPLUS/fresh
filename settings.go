@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -16,7 +15,9 @@ const (
 	mainSettingsSection = "Settings"
 )
 
-var settings = map[string]string{
+type Settings map[string]string
+
+var settings = Settings {
 	"config_path":       "./runner.conf",
 	"root":              ".",
 	"output_path":       "./tmp",
@@ -26,7 +27,6 @@ var settings = map[string]string{
 	"build_delay":       "600",
 	"colors":            "1",
 	"shutdown_signal":   "TERM",
-	"auto_run":          "on",
 	"log_color_main":    "cyan",
 	"log_color_build":   "yellow",
 	"log_color_runner":  "green",
@@ -62,88 +62,74 @@ var colors = map[string]string{
 	"bright_white":   "37;2",
 }
 
-func logColor(logName string) string {
+func (s Settings) logColor(logName string) string {
 	settingsKey := fmt.Sprintf("log_color_%s", logName)
-	colorName := settings[settingsKey]
+	colorName := s[settingsKey]
 
 	return colors[colorName]
 }
 
-func loadEnvSettings() {
-	for key, _ := range settings {
-		envKey := fmt.Sprintf("%s%s", envSettingsPrefix, strings.ToUpper(key))
-		if value := os.Getenv(envKey); value != "" {
-			settings[key] = value
-		}
-	}
-}
-
-func loadRunnerConfigSettings() {
-	if _, err := os.Stat(configPath()); err != nil {
+func (s Settings) load() {
+	if _, err := os.Stat(s.configPath()); err != nil {
 		return
 	}
 
-	logger.Printf("Loading settings from %s", configPath())
-	sections, err := config.ParseFile(configPath(), mainSettingsSection)
+	logger.Printf("Loading settings from %s", s.configPath())
+	sections, err := config.ParseFile(s.configPath(), mainSettingsSection)
 	if err != nil {
 		return
 	}
 
 	for key, value := range sections[mainSettingsSection] {
-		settings[key] = value
+		s[key] = value
 	}
 }
 
-func getenv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-
-	return defaultValue
+func (s Settings) root() string {
+	return s["root"]
 }
 
-func root() string {
-	return settings["root"]
+func (s Settings) configPath() string {
+	return s["config_path"]
 }
 
-func autoRun() bool {
-	return settings["auto_run"] == "on";
-}
-
-func shutdownSignal() syscall.Signal {
-	signal := syscall.SIGTERM
-	switch settings["shutdown_signal"] {
-		case "KILL":
-			signal = syscall.SIGKILL
+func (s Settings) shutdownSignal() syscall.Signal {
+	var signal syscall.Signal
+	switch s["shutdown_signal"] {
+	case "TERM":
+		signal = syscall.SIGTERM
+	case "KILL":
+		signal = syscall.SIGKILL
 	}
 	return signal
 }
 
-func outputPath() string {
-	return settings["output_path"]
+func (s Settings) outputPath() string {
+	return s["output_path"]
 }
 
-func buildName() string {
-	return settings["build_name"]
-}
-func buildPath() string {
-	return filepath.Join(outputPath(), buildName())
+func (s Settings) postBuildScript() Script {
+	return Script(s["post_build_script"])
 }
 
-func buildErrorsFileName() string {
-	return settings["build_log"]
+func (s Settings) buildName() string {
+	return s["build_name"]
 }
 
-func buildErrorsFilePath() string {
-	return filepath.Join(outputPath(), buildErrorsFileName())
+func (s Settings) buildPath() string {
+	return filepath.Join(s.outputPath(), s.buildName())
 }
 
-func configPath() string {
-	return settings["config_path"]
+func (s Settings) buildErrorsFileName() string {
+	return s["build_log"]
 }
 
-func buildDelay() time.Duration {
-	value, _ := strconv.Atoi(settings["build_delay"])
+func (s Settings) buildErrorsFilePath() string {
+	return filepath.Join(s.outputPath(), s.buildErrorsFileName())
+}
+
+func (s Settings) buildDelay() time.Duration {
+	value, _ := strconv.Atoi(s["build_delay"])
 
 	return time.Duration(value)
 }
