@@ -111,7 +111,7 @@ func (s Settings) outputPath() string {
 func (s Settings) postBuildScript() *Script {
 	script := NewScript(s["post_build_script"])
 	if path := s.gopath(); path != "" {
-		script.Env = []string{fmt.Sprintf("GOPATH=%s",path)}
+		script.Env = append(os.Environ(), fmt.Sprintf("GOPATH=%s",path))
 	}
 	return script
 }
@@ -119,7 +119,7 @@ func (s Settings) postBuildScript() *Script {
 func (s Settings) preBuildScript() *Script {
 	script := NewScript(s["pre_build_script"])
 	if path := s.gopath(); path != "" {
-		script.Env = []string{fmt.Sprintf("GOPATH=%s",path)}
+		script.Env = append(os.Environ(), fmt.Sprintf("GOPATH=%s",path))
 	}
 	return script
 }
