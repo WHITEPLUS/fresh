@@ -9,15 +9,22 @@ import (
 	"os/exec"
 )
 
-type Script string
-
-func (s Script) Exists() bool {
-	return s != ""
+type Script struct {
+	Path string
+	Env []string
 }
 
-func (s Script) Run() (string, bool) {
+func NewScript(path string) *Script {
+	return &Script{ Path: path, Env: nil }
+}
 
-	command := []string{string(s)}
+func (s *Script) Exists() bool {
+	return s.Path != ""
+}
+
+func (s *Script) Run() (string, bool) {
+
+	command := []string{s.Path}
 	shebang, err := s.Shebang()
 
 	if err != nil {
@@ -40,6 +47,10 @@ func (s Script) Run() (string, bool) {
 		return err.Error(), false
 	}
 
+	if s.Env != nil {
+		cmd.Env = s.Env
+	}
+
 	err = cmd.Start()
 	if err != nil {
 		return err.Error(), false
@@ -56,9 +67,9 @@ func (s Script) Run() (string, bool) {
 	return "", true
 }
 
-func (s Script) Shebang() (string, error) {
+func (s *Script) Shebang() (string, error) {
 
-	f, err := os.Open(string(s))
+	f, err := os.Open(s.Path)
 	if (err != nil) {
 		return "", err
 	}

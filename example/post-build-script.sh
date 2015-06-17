@@ -1,3 +1,3 @@
 #! /usr/bin/env bash
 
-echo PostBuildScript
+$(cd $(dirname $0);pwd)/tmp/example

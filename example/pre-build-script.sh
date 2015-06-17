@@ -1,3 +1,3 @@
 #! /usr/bin/env bash
 
-echo PreBuildScript
+echo PreBuildScript: GOPATH=$GOPATH

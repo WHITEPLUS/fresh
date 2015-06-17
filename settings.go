@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -107,12 +108,20 @@ func (s Settings) outputPath() string {
 	return s["output_path"]
 }
 
-func (s Settings) postBuildScript() Script {
-	return Script(s["post_build_script"])
+func (s Settings) postBuildScript() *Script {
+	script := NewScript(s["post_build_script"])
+	if path := s.gopath(); path != "" {
+		script.Env = []string{fmt.Sprintf("GOPATH=%s",path)}
+	}
+	return script
 }
 
-func (s Settings) preBuildScript() Script {
-	return Script(s["pre_build_script"])
+func (s Settings) preBuildScript() *Script {
+	script := NewScript(s["pre_build_script"])
+	if path := s.gopath(); path != "" {
+		script.Env = []string{fmt.Sprintf("GOPATH=%s",path)}
+	}
+	return script
 }
 
 func (s Settings) buildName() string {
@@ -121,6 +130,26 @@ func (s Settings) buildName() string {
 
 func (s Settings) buildPath() string {
 	return filepath.Join(s.outputPath(), s.buildName())
+}
+
+func (s Settings) gopath() string {
+	gopath, ok := s["gopath"]
+	if !ok {
+		return ""
+	}
+	list := strings.Split(gopath, ":")
+	pathList := []string{}
+	for _, path := range list {
+		if path == "" {
+			continue
+		}
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		// FIXME
+		pathList = append(pathList, path)
+	}
+	return strings.Join(pathList, ":")
 }
 
 func (s Settings) buildErrorsFileName() string {

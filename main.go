@@ -326,6 +326,10 @@ func build() (string, bool) {
 		fatal(err)
 	}
 
+	if path := settings.gopath(); path != "" {
+		cmd.Env = []string{fmt.Sprintf("GOPATH=%s",path)}
+	}
+
 	err = cmd.Start()
 	if err != nil {
 		fatal(err)
