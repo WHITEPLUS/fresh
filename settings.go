@@ -25,6 +25,7 @@ var settings = Settings {
 	"build_log":         "runner-build-errors.log",
 	"valid_ext":         ".go, .tpl, .tmpl, .html",
 	"build_delay":       "600",
+	"debug":             "off",
 	"colors":            "1",
 	"shutdown_signal":   "TERM",
 	"log_color_main":    "cyan",
@@ -164,4 +165,8 @@ func (s Settings) buildDelay() time.Duration {
 	value, _ := strconv.Atoi(s["build_delay"])
 
 	return time.Duration(value)
+}
+
+func (s Settings) debug() bool {
+	return s["debug"] == "on"
 }

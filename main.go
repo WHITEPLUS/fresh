@@ -314,7 +314,14 @@ func build() (string, bool) {
 
 	buildLog("Building...")
 
-	cmd := exec.Command("go", "build", "-o", settings.buildPath(), settings.root())
+	arguments := []string{"build"}
+	if settings.debug() {
+		arguments = append(arguments, ([]string{"-gcflags", "-N -l"})...)
+	}
+	arguments = append(arguments, ([]string{"-o", settings.buildPath(), settings.root()})...)
+	cmd := exec.Command("go", arguments...)
+
+	buildLog("go %s", strings.Join(cmd.Args, " "))
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {

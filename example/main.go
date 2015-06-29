@@ -5,5 +5,7 @@ import (
 )
 
 func main() {
-  fmt.Println("test")
+  num := 1
+  str := "test"
+  fmt.Printf("%s %d\n",str,num)
 }
