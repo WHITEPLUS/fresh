@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	envSettingsPrefix   = "GRACEFRESH_"
 	mainSettingsSection = "Settings"
 )
 
@@ -83,6 +84,14 @@ func (s Settings) load() {
 
 	for key, value := range sections[mainSettingsSection] {
 		s[key] = value
+	}
+
+	// overwrite settings by environment variables
+	for key, _ := range settings {
+		envKey := fmt.Sprintf("%s%s", envSettingsPrefix, strings.ToUpper(key))
+		if value := os.Getenv(envKey); value != "" {
+			s[key] = value
+		}
 	}
 }
 
